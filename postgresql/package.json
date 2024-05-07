@@ -1,0 +1,45 @@
+{
+  "main": "lib/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node lib/index.js",
+    "compile": "tsc --project ./tsconfig.build.json",
+    "build": "npm run build:clean && npm run compile",
+    "build:clean": "rm -rf ./lib",
+    "build:watch": "tsc --watch",
+    "test": "jest"
+  },
+  "name": "genkit-postgres",
+  "version": "0.0.1",
+  "description": "",
+  "keywords": [],
+  "author": "",
+  "types": "lib/index.d.ts",
+  "license": "ISC",
+  "dependencies": {
+    "@genkit-ai/ai": "^0.5.0-rc.5",
+    "@genkit-ai/core": "^0.5.0-rc.5",
+    "@genkit-ai/dotprompt": "^0.5.0-rc.5",
+    "@genkit-ai/flow": "^0.5.0-rc.5",
+    "express": "^4.19.2",
+    "knex": "^3.1.0",
+    "pg": "^8.11.5",
+    "ts-case-convert": "^2.0.7",
+    "zod": "^3.23.4"
+  },
+  "exports": {
+    ".": {
+      "require": "./lib/index.js",
+      "import": "./lib/index.mjs",
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/pg": "^8.11.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.4.5"
+  }
+}
