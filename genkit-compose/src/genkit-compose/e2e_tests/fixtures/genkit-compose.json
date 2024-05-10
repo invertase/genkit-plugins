@@ -1,0 +1,52 @@
+{
+  "options": {
+    "type": "mixed",
+    "multi": false,
+    "allowSelfLoops": true
+  },
+  "attributes": {},
+  "nodes": [
+    {
+      "key": "foo",
+      "attributes": {
+        "name": "foo",
+        "inputValues": {
+          "hello": "world"
+        },
+        "schema": {
+          "inputSchema": {
+            "jsonSchema": {
+              "type": "object",
+              "properties": {
+                "input": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "input"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            }
+          },
+          "outputSchema": {
+            "jsonSchema": {
+              "type": "object",
+              "properties": {
+                "output": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "output"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "edges": []
+}
