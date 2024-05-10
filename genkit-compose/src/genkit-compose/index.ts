@@ -41,7 +41,18 @@ function createdFlows(): Flow<any, any, any>[] {
   return global[CREATED_FLOWS];
 }
 
-const defaultGraph = new DirectedGraph() as FlowGraph;
+const CREATED_EDGES = "genkit-flow-diagrams__CREATED_EDGES";
+
+function createdEdges(): {
+  source: string;
+  target: string;
+  attributes: { includeKeys: string[] };
+}[] {
+  if (global[CREATED_EDGES] === undefined) {
+    global[CREATED_EDGES] = [];
+  }
+  return global[CREATED_EDGES];
+}
 
 export function defineFlow<
   I extends z.AnyZodObject = z.AnyZodObject,
@@ -60,34 +71,51 @@ export function defineFlow<
 
   createdFlows().push(flow);
 
-  defaultGraph.addNode(flow.name, {
-    name: flow.name,
-    inputValues: {},
-    flow,
-    schema: {
-      inputSchema: {
-        zod: flow.inputSchema,
-        jsonSchema: zodToJsonSchema(flow.inputSchema!) as JsonSchema7ObjectType,
-      },
-      outputSchema: {
-        zod: flow.outputSchema,
-        jsonSchema: zodToJsonSchema(
-          flow.outputSchema!
-        ) as JsonSchema7ObjectType,
-      },
-    },
-  });
-
   return flow;
 }
 
 export function compose<
   I1 extends z.ZodObject<ZodRawShape, UnknownKeysParam>,
   I2 extends z.ZodObject<ZodRawShape, UnknownKeysParam>
->(flow1: Flow<I1, I2, any>, flow2: Flow<I2, any, any>, inputKeys: string[]) {
-  defaultGraph.addDirectedEdge(flow1.name, flow2.name, {
-    includeKeys: inputKeys,
+>(flow1: Flow<I1, I2, any>, flow2: Flow<I2, any, any>, includeKeys: string[]) {
+  createdEdges().push({
+    source: flow1.name,
+    target: flow2.name,
+    attributes: {
+      includeKeys,
+    },
   });
+}
+
+function defaultGraph() {
+  const graph: FlowGraph = new DirectedGraph();
+  for (const flow of createdFlows()) {
+    graph.addNode(flow.name, {
+      name: flow.name,
+      inputValues: {},
+      flow: flow,
+      schema: {
+        inputSchema: {
+          zod: flow.inputSchema,
+          jsonSchema: zodToJsonSchema(
+            flow.inputSchema
+          ) as JsonSchema7ObjectType,
+        },
+        outputSchema: {
+          zod: flow.outputSchema,
+          jsonSchema: zodToJsonSchema(
+            flow.outputSchema
+          ) as JsonSchema7ObjectType,
+        },
+      },
+    });
+  }
+
+  for (const edge of createdEdges()) {
+    console.log("adding edge", edge);
+    graph.addDirectedEdge(edge.source, edge.target, edge.attributes);
+  }
+  return graph;
 }
 
 interface ComposeServerParams {
@@ -238,15 +266,11 @@ export const getAppSync = (params: ComposeServerParams) => {
   const composeConfigPath =
     params.composeConfigPath || findGenkitComposeFileSync();
 
-  // if (!composeConfigPath) {
-  //   throw new Error("No compose config file found");
-  // }
-
   const composeConfig = composeConfigPath
     ? readAndParseConfigFileSync(composeConfigPath)
     : null;
 
-  const graph = composeConfig ? parseAsGraph(composeConfig) : defaultGraph;
+  const graph = composeConfig ? parseAsGraph(composeConfig) : defaultGraph();
 
   const flows = createdFlows();
 
@@ -272,7 +296,7 @@ export const getAppSync = (params: ComposeServerParams) => {
     throw new Error("The flow diagram contains a cycle.");
   }
 
-  // validateNoDuplicates(graph);
+  validateNoDuplicates(graph);
 
   const totalInputSchema = getTotalInputsSchema(graph);
   const totalOutputSchema = getTotalOutputSchema(graph);
@@ -332,6 +356,31 @@ export const getAppSync = (params: ComposeServerParams) => {
 
     const graph = Graph.from(parsedBody);
 
+    for (const node of parsedBody.nodes) {
+      const flow = createdFlows().find((f) => f.name === node.attributes?.name);
+
+      const schema = {
+        inputSchema: {
+          zod: flow?.inputSchema,
+          jsonSchema: zodToJsonSchema(
+            flow?.inputSchema
+          ) as JsonSchema7ObjectType,
+        },
+        outputSchema: {
+          zod: flow?.outputSchema,
+          jsonSchema: zodToJsonSchema(
+            flow?.outputSchema
+          ) as JsonSchema7ObjectType,
+        },
+      };
+
+      graph.updateNodeAttributes(node.key, (a) => ({
+        ...a,
+        flow,
+        schema,
+      }));
+    }
+
     if (hasCycle(graph)) {
       throw new Error("The flow diagram contains a cycle.");
     }
@@ -344,13 +393,22 @@ export const getAppSync = (params: ComposeServerParams) => {
 
     const executionOrder = topologicalSort(graph);
 
-    runExecutionOrder(executionOrder, graph);
+    await runExecutionOrder(executionOrder, graph);
 
     res.send(graph.toJSON());
   });
 
-  app.get("/introspect", (req, res) => {
-    res.send(zodToJsonSchema(totalInputSchema));
+  app.get("/listFlows", (req, res) => {
+    const flows = createdFlows();
+
+    const serializedFlows = flows.map((f) => ({
+      name: f.name,
+      id: f.name,
+      inputSchema: zodToJsonSchema(f.inputSchema),
+      outputSchema: zodToJsonSchema(f.outputSchema),
+    }));
+
+    res.send(serializedFlows);
   });
 
   return app;
@@ -358,9 +416,8 @@ export const getAppSync = (params: ComposeServerParams) => {
 
 /**
  *
- * - get the UI working with the new plugin, add a bit to generate the serialized yaml file
  *
- * - get everything above to be synchronous so it can define a genkit flow
+ * get keys separate from flow names
  *
  * - get a simplified workflow/pipeline version working
  */

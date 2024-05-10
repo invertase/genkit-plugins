@@ -1,7 +1,4 @@
-import { UnknownKeysParam, ZodObject, ZodRawShape } from "zod";
 import { FlowGraph } from "./types";
-import z from "zod";
-import { getInputJsonSchema } from "./getTotalInputSchema";
 
 export const validateNoDuplicates = (graph: FlowGraph) => {
   const nodes = graph.nodes();
@@ -9,7 +6,7 @@ export const validateNoDuplicates = (graph: FlowGraph) => {
   for (const node of nodes) {
     const inputKeys = graph
       .inEdges(node)
-      .map(graph.getEdgeAttributes)
+      .map((edge) => graph.getEdgeAttributes(edge))
       .flatMap((a) => a.includeKeys);
 
     const keyWithDuplicate = inputKeys.find(

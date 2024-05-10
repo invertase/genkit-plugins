@@ -21,6 +21,7 @@
     "@genkit-ai/flow": "^0.5.0-rc.8",
     "@genkit-ai/vertexai": "^0.5.0-rc.8",
     "express": "^4.19.2",
+    "genkit-compose": "file:genkit-compose-0.0.1.tgz",
     "genkit-flow-diagram": "file:genkit-flow-diagram-1.0.0.tgz",
     "zod": "^3.23.6"
   },

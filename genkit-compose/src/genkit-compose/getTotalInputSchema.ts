@@ -90,12 +90,14 @@ export const getTotalInputsSchema = (graph: FlowGraph) => {
 
     const inputSchema = getInputZodSchema(graph, node);
 
-    totalInputSchema = addSubschema(
-      totalInputSchema,
-      inputSchema,
-      node,
-      keysWithoutInputsPiped
-    );
+    if (keysWithoutInputsPiped.length > 0) {
+      totalInputSchema = addSubschema(
+        totalInputSchema,
+        inputSchema,
+        node,
+        keysWithoutInputsPiped
+      );
+    }
   }
   return totalInputSchema;
 };
@@ -108,7 +110,7 @@ export const getTotalOutputSchema = (graph: FlowGraph) => {
   for (const node of nodes) {
     const outputKeys = graph
       .outEdges(node)
-      .map(graph.getEdgeAttributes)
+      .map((edge) => graph.getEdgeAttributes(edge))
       .flatMap((a) => a.includeKeys);
 
     const outputJsonSchema = getOutputJsonSchema(graph, node);
@@ -137,7 +139,7 @@ export const getTotalOutput = (graph: FlowGraph) => {
   for (const node of nodes) {
     const outputKeys = graph
       .outEdges(node)
-      .map(graph.getEdgeAttributes)
+      .map((edge) => graph.getEdgeAttributes(edge))
       .flatMap((a) => a.includeKeys);
 
     const outputJsonSchema = getOutputJsonSchema(graph, node);
@@ -163,7 +165,6 @@ export const getTotalOutput = (graph: FlowGraph) => {
         };
       }
     }
-    console.log("TOTAL OUTPUT NOW", totalOutput);
   }
   return totalOutput;
 };

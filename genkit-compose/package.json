@@ -1,6 +1,6 @@
 {
-  "name": "genkit-flow-diagram",
-  "version": "1.0.0",
+  "name": "genkit-compose",
+  "version": "0.0.1",
   "description": "",
   "main": "lib/index.js",
   "type": "commonjs",
