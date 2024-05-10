@@ -22,6 +22,13 @@ interface GenkitFlowDiagramPluginParams {
   port: number;
 }
 
+export {
+  startComposeServer,
+  startComposeServerAsync,
+  defineFlow,
+  compose,
+} from "./genkit-compose";
+
 export const genkitFlowDiagrams: Plugin<[GenkitFlowDiagramPluginParams] | []> =
   genkitPlugin(
     "genkit-flow-diagram",

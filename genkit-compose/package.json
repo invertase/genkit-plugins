@@ -19,7 +19,7 @@
     "graphology": "^0.25.4",
     "graphology-dag": "^0.4.1",
     "js-yaml": "^4.1.0",
-    "zod": "^3.23.5",
+    "zod": "^3.23.8",
     "zod-to-json-schema": "^3.23.0"
   },
   "devDependencies": {

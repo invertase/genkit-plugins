@@ -7,7 +7,8 @@ import { vertexAI } from "@genkit-ai/vertexai";
 import {
   genkitFlowDiagrams,
   defineFlow,
-  startFlowGraphServer,
+  startComposeServer,
+  compose,
 } from "genkit-flow-diagram";
 
 configureGenkit({
@@ -19,20 +20,30 @@ configureGenkit({
   enableTracingAndMetrics: true,
 });
 
-export const fooBarFlow = defineFlow(
+export const flow1 = defineFlow(
   {
-    name: "fooBarFlow",
-    inputSchema: z.object({ foo: z.string() }),
-    outputSchema: z.object({ bar: z.string() }),
+    name: "flow1",
+    inputSchema: z.object({ input1: z.string() }),
+    outputSchema: z.object({ input2: z.string() }),
   },
-  async ({ foo }) => {
-    return { bar: "baz" };
+  async ({ input1 }) => {
+    return { input2: input1 };
   }
 );
 
-startFlowGraphServer({
-  port: 4003,
-  options: {
-    defaultPipeStrategy: "exclude",
+export const flow2 = defineFlow(
+  {
+    name: "flow2",
+    inputSchema: z.object({ input2: z.string() }),
+    outputSchema: z.object({ output: z.string() }),
   },
+  async ({ input2 }) => {
+    return { output: input2 };
+  }
+);
+
+compose(flow1, flow2, ["input2"]);
+
+startComposeServer({
+  port: 4003,
 });

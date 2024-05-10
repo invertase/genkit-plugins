@@ -2,7 +2,6 @@ import { UnknownKeysParam, ZodObject, ZodRawShape, util } from "zod";
 import { FlowGraph } from "./types";
 import z from "zod";
 import { JsonSchema7ObjectType } from "zod-to-json-schema";
-
 export function addSubschema<
   T extends ZodRawShape,
   UnknownKeys extends "strip" | "passthrough" | "strict"
@@ -74,9 +73,13 @@ export const getTotalInputsSchema = (graph: FlowGraph) => {
   let totalInputSchema = z.object({});
 
   for (const node of nodes) {
+    const inEdges = graph.inEdges(node);
+
+    console.log("inEdges", inEdges);
+
     const inputKeys = graph
       .inEdges(node)
-      .map(graph.getEdgeAttributes)
+      .map((edge) => graph.getEdgeAttributes(edge))
       .flatMap((a) => a.includeKeys);
 
     const inputJsonSchema = getInputJsonSchema(graph, node);
