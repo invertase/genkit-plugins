@@ -1,6 +1,6 @@
 import { promises as fs, readdirSync, readFileSync } from "fs";
 import path from "path";
-import yaml from "js-yaml";
+import yaml from "yaml";
 import Graph, { DirectedGraph } from "graphology";
 import { SerializedGraph } from "graphology-types";
 import { SerializedFlowGraphSchema } from "./types";
@@ -139,7 +139,7 @@ export function readAndParseConfigFileSync(
     case "yaml":
     case "yml":
       return SerializedFlowGraphSchema.parse(
-        yaml.load(fileContent)
+        yaml.stringify(fileContent)
       ) as SerializedFlowGraph;
     case "json":
       return SerializedFlowGraphSchema.parse(
