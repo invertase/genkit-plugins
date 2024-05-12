@@ -1,15 +1,16 @@
-import { FlowGraph } from "../flow-graph/FlowGraph";
-import FlowManager from "../../FlowManager";
+import { Flow, runFlow } from "@genkit-ai/flow";
+import { DirectedGraph } from "graphology";
+import { FlowGraph } from "./types";
 
-export const runExecutionOrder = async (
-  order: string[],
-  graph: FlowGraph,
-  flowManager: FlowManager
-) => {
+export const runExecutionOrder = async (order: string[], graph: FlowGraph) => {
   // Process each node according to the execution order
   for (const node of order) {
     const attributes = graph.getNodeAttributes(node);
-    const { inputValues, flowId } = attributes;
+    const { inputValues, flow } = attributes;
+
+    if (!flow) {
+      throw new Error(`Flow not found during execution: ${node}`);
+    }
 
     // Execute the flow associated with the node and get output values
     let outputValues: Record<string, string | number> = {};
@@ -19,10 +20,12 @@ export const runExecutionOrder = async (
         throw new Error("Retry limit exceeded");
       }
       try {
-        outputValues = await flowManager.runFlow(flowId, inputValues);
+        console.log("inputValues", JSON.stringify(inputValues, null, 2));
+
+        outputValues = await runFlow(flow, inputValues);
         break;
       } catch (error) {
-        console.error(`Error in node ${node}:`, error);
+        console.error(`Error in node ${node}:`, error, "Retrying...");
       }
     }
 
@@ -33,11 +36,15 @@ export const runExecutionOrder = async (
     for (const edge of outgoingEdges) {
       const edgeAttributes = graph.getEdgeAttributes(edge);
 
-      const { target, checkedKeys } = edgeAttributes;
-      const targetInputValues = distributeValues(checkedKeys, outputValues);
+      const { includeKeys } = edgeAttributes;
+      const targetInputValues = distributeValues(
+        includeKeys as string[],
+        outputValues
+      );
 
       // Merge new values into the target node's input values
-      const targetAttributes = graph.getNodeAttributes(target);
+      const targetAttributes = graph.getTargetAttributes(edge);
+      const target = graph.target(edge);
       graph.setNodeAttribute(target, "inputValues", {
         ...targetAttributes.inputValues,
         ...targetInputValues,

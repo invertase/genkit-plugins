@@ -22,25 +22,19 @@ interface GenkitFlowDiagramPluginParams {
   port: number;
 }
 
+export {
+  startComposeServer,
+  startComposeServerAsync,
+  defineFlow,
+  compose,
+} from "./genkit-compose";
+
 export const genkitFlowDiagrams: Plugin<[GenkitFlowDiagramPluginParams] | []> =
   genkitPlugin(
     "genkit-flow-diagram",
     async (params?: GenkitFlowDiagramPluginParams) => {
-      console.log(
-        "Starting genkit-flow-diagram plugin at port",
-        params?.port.toString() || "4003"
-      );
-
-      const pathToScript = path.join(__dirname, "startApp.js");
-
-      child_process.fork(pathToScript, [], {
-        env: {
-          GENKIT_REFLECTION_PORT: process.env.GENKIT_REFLECTION_PORT,
-          GENKIT_ENV: process.env.GENKIT_ENV,
-          GENKIT_FLOW_DIAGRAMS_PORT: params?.port.toString() || "4003",
-        },
-      });
-
-      return {};
+      if (process.env.GENKIT_ENV === "dev") {
+        return {};
+      }
     }
   );
