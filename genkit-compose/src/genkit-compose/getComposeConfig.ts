@@ -111,7 +111,7 @@ export async function readAndParseConfigFile(
     case "yaml":
     case "yml":
       return SerializedFlowGraphSchema.parse(
-        yaml.load(fileContent)
+        yaml.stringify(fileContent)
       ) as SerializedFlowGraph;
     case "json":
       return SerializedFlowGraphSchema.parse(

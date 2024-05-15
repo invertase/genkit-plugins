@@ -11,7 +11,6 @@ export function addSubschema<
   subschemaName: string,
   keys: string[]
 ) {
-  console.warn("keys", keys);
   // Create the mask object for the pick method
   const pickMask = Object.fromEntries(
     keys.map((key) => [key, true])
@@ -27,6 +26,24 @@ export function addSubschema<
 
   // Merge the new subschema with the total schema
   return totalSchema.merge(subschema);
+}
+
+export function addPropertyToSchema<
+  T extends ZodRawShape,
+  UnknownKeys extends UnknownKeysParam
+>(
+  totalSchema: ZodObject<T, UnknownKeys, any>,
+  schema: ZodObject<T, UnknownKeys, any>,
+  keys: string[]
+) {
+  const pickMask = Object.fromEntries(
+    keys.map((key) => [key, true])
+  ) as util.Exactly<{ [k in keyof T]?: true }, typeof pickMask>;
+
+  // Pick the specified keys from the schema using the mask
+  const pickSchema = schema.pick(pickMask);
+
+  return totalSchema.merge(pickSchema);
 }
 
 export const getInputZodSchema = (graph: FlowGraph, node: string) => {
@@ -100,6 +117,68 @@ export const getTotalInputsSchema = (graph: FlowGraph) => {
     }
   }
   return totalInputSchema;
+};
+
+export const getFlatInputsSchema = (graph: FlowGraph) => {
+  const nodes = graph.nodes();
+
+  let totalInputSchema = z.object({});
+
+  for (const node of nodes) {
+    const inputKeys = graph
+      .inEdges(node)
+      .map((edge) => graph.getEdgeAttributes(edge))
+      .flatMap((a) => a.includeKeys);
+
+    const inputJsonSchema = getInputJsonSchema(graph, node);
+
+    const keysWithoutInputsPiped = Object.keys(
+      inputJsonSchema.properties
+    ).filter((key) => !inputKeys.includes(key));
+
+    const inputSchema = getInputZodSchema(graph, node);
+
+    if (keysWithoutInputsPiped.length > 0) {
+      // @ts-ignore
+      totalInputSchema = addPropertyToSchema(
+        totalInputSchema,
+        inputSchema,
+        keysWithoutInputsPiped
+      );
+    }
+  }
+  return totalInputSchema;
+};
+
+export const getFlatOutputsSchema = (graph: FlowGraph) => {
+  const nodes = graph.nodes();
+
+  let totalOutputSchema = z.object({});
+
+  for (const node of nodes) {
+    const outputKeys = graph
+      .outEdges(node)
+      .map((edge) => graph.getEdgeAttributes(edge))
+      .flatMap((a) => a.includeKeys);
+
+    const outputJsonSchema = getOutputJsonSchema(graph, node);
+
+    const keysWithoutOutputsPiped = Object.keys(
+      outputJsonSchema.properties
+    ).filter((key) => !outputKeys.includes(key));
+
+    const outputSchema = getOutputZodSchema(graph, node);
+
+    if (keysWithoutOutputsPiped.length > 0) {
+      // @ts-ignore
+      totalOutputSchema = addPropertyToSchema(
+        totalOutputSchema,
+        outputSchema,
+        keysWithoutOutputsPiped
+      );
+    }
+  }
+  return totalOutputSchema;
 };
 
 export const getTotalOutputSchema = (graph: FlowGraph) => {

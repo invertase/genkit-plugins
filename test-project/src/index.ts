@@ -4,85 +4,95 @@ import {
   genkitFlowDiagrams,
   defineFlow,
   startComposeServer,
-  compose,
 } from "genkit-compose";
+import { vertexAI, geminiPro } from "@genkit-ai/vertexai";
+import { generate } from "@genkit-ai/ai";
 
 configureGenkit({
-  plugins: [genkitFlowDiagrams({ port: 4003 })],
+  plugins: [genkitFlowDiagrams({ port: 4003 }), vertexAI()],
   logLevel: "debug",
   enableTracingAndMetrics: true,
 });
 
-// export const flow1 = defineFlow(
-//   {
-//     name: "flow1",
-//     inputSchema: z.object({ input1: z.string() }),
-//     outputSchema: z.object({ input2: z.string() }),
-//   },
-//   async ({ input1 }) => {
-//     return { input2: input1 };
-//   }
-// );
-
-// export const flow2 = defineFlow(
-//   {
-//     name: "flow2",
-//     inputSchema: z.object({ input2: z.string() }),
-//     outputSchema: z.object({ output: z.string() }),
-//   },
-//   async ({ input2 }) => {
-//     return { output: input2 };
-//   }
-// );
-
-// export const flow3 = defineFlow(
-//   {
-//     name: "flow3",
-//     inputSchema: z.object({ output: z.string() }),
-//     outputSchema: z.object({ output1: z.string() }),
-//   },
-//   async ({ output }) => {
-//     return { output1: output };
-//   }
-// );
-
-// compose(flow1, flow2, ["input2"]);
-
-// compose(flow2, flow3, ["output"]);
-
-export const addFlow = defineFlow(
+export const suggestActivityFlow = defineFlow(
   {
-    name: "addFlow",
+    name: "suggestActivityFlow",
     inputSchema: z.object({
-      x: z.number(),
-      b: z.number(),
+      date: z.string(),
+      location: z.string(),
+      budgetInDollars: z.number(),
     }),
     outputSchema: z.object({
-      x: z.number(),
+      activity: z.string(),
     }),
   },
-  async ({ x, b }) => {
-    return { x: x + b };
+  async ({ date, budgetInDollars }) => {
+    const llmResponse = await generate({
+      model: geminiPro,
+      prompt: `Suggest an activity for ${date} at ${location} with a budget of ${budgetInDollars} dollars.`,
+      output: {
+        format: "json",
+        schema: z.object({
+          activity: z.string(),
+        }),
+      },
+    });
+
+    return llmResponse.output() || { activity: "No activity found" };
   }
 );
 
-export const multiplyFlow = defineFlow(
+export const chooseLocationFlow = defineFlow(
   {
-    name: "multiplyFlow",
+    name: "chooseLocationFlow",
     inputSchema: z.object({
-      x: z.number(),
-      b: z.number(),
+      vibe: z.string(),
     }),
     outputSchema: z.object({
-      out: z.number(),
+      location: z.string(),
     }),
   },
-  async ({ x, b }) => {
-    return { out: x * b };
+  async ({ vibe }) => {
+    const llmResponse = await generate({
+      model: geminiPro,
+      prompt: `Choose a location for a ${vibe} vacation.`,
+      output: {
+        format: "json",
+        schema: z.object({
+          location: z.string(),
+        }),
+      },
+    });
+
+    return llmResponse.output()!;
   }
 );
 
-startComposeServer({
-  port: 4003,
-  cors: { origin: "*" },
-});
+export const estimateCostFlow = defineFlow(
+  {
+    name: "estimateCostFlow",
+    inputSchema: z.object({
+      activity: z.string(),
+      location: z.string(),
+    }),
+    outputSchema: z.object({
+      cost: z.number(),
+    }),
+  },
+  async ({ activity, location }) => {
+    const llmResponse = await generate({
+      model: geminiPro,
+      prompt: `Estimate the cost of ${activity} in ${location}.`,
+      output: {
+        format: "json",
+        schema: z.object({
+          cost: z.number(),
+        }),
+      },
+    });
+
+    return llmResponse.output()!;
+  }
+);
+
+startComposeServer({ port: 4003, cors: { origin: "*" } });

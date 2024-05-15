@@ -26,11 +26,16 @@ import zodToJsonSchema, { JsonSchema7ObjectType } from "zod-to-json-schema";
 import { runExecutionOrder } from "./runGraph";
 import { validateNoDuplicates } from "./validatePiping";
 import {
+  getFlatInputsSchema,
+  getFlatOutputsSchema,
   getTotalInputsSchema,
   getTotalOutput,
   getTotalOutputSchema,
 } from "./getTotalInputSchema";
-import z, { UnknownKeysParam, ZodRawShape } from "zod";
+import * as admin from "firebase-admin";
+import z from "zod";
+
+admin.initializeApp();
 
 const CREATED_FLOWS = "genkit-flow-diagrams__CREATED_FLOWS";
 
@@ -74,10 +79,11 @@ export function defineFlow<
   return flow;
 }
 
-export function compose<
-  I1 extends z.ZodObject<ZodRawShape, UnknownKeysParam>,
-  I2 extends z.ZodObject<ZodRawShape, UnknownKeysParam>
->(flow1: Flow<I1, I2, any>, flow2: Flow<I2, any, any>, includeKeys: string[]) {
+export function compose(
+  flow1: Flow<any, any, any>,
+  flow2: Flow<any, any, any>,
+  includeKeys: string[]
+) {
   createdEdges().push({
     source: flow1.name,
     target: flow2.name,
@@ -301,6 +307,43 @@ export const getAppSync = (params: ComposeServerParams) => {
   const totalInputSchema = getTotalInputsSchema(graph);
   const totalOutputSchema = getTotalOutputSchema(graph);
 
+  const flatInputsSchema = getFlatInputsSchema(graph);
+  const flatOutputsSchema = getFlatOutputsSchema(graph);
+
+  defineFlow(
+    {
+      name: "service__inputNode",
+      inputSchema: flatInputsSchema,
+      outputSchema: flatInputsSchema,
+    },
+    async (inputs) => inputs
+  );
+
+  defineFlow(
+    {
+      name: "service__outputNode",
+      inputSchema: flatOutputsSchema,
+      outputSchema: flatOutputsSchema,
+    },
+    async (outputs) => outputs
+  );
+
+  defineFlow(
+    {
+      name: "service__firestoreQuery",
+      inputSchema: z.object({
+        collection: z.string(),
+      }),
+      outputSchema: z.object({
+        data: z.string(),
+      }),
+    },
+    async ({ collection }) => {
+      const snapshot = await admin.firestore().collection(collection).get();
+      return { data: JSON.stringify(snapshot.docs.map((doc) => doc.data())) };
+    }
+  );
+
   const executionOrder = topologicalSort(graph);
 
   const totalFlow = originalDefineFlow(
@@ -399,7 +442,7 @@ export const getAppSync = (params: ComposeServerParams) => {
   });
 
   app.get("/listFlows", (req, res) => {
-    const flows = createdFlows();
+    const flows = createdFlows().filter((f) => !f.name.startsWith("service__"));
 
     const serializedFlows = flows.map((f) => ({
       name: f.name,
@@ -409,6 +452,14 @@ export const getAppSync = (params: ComposeServerParams) => {
     }));
 
     res.send(serializedFlows);
+  });
+
+  app.get("/listServices", (req, res) => {
+    const flows = createdFlows();
+
+    const services = flows.filter((f) => f.name.startsWith("service__"));
+
+    res.send(services);
   });
 
   return app;

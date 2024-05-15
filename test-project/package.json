@@ -15,17 +15,20 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anatine/zod-mock": "^3.13.4",
     "@genkit-ai/ai": "^0.5.0-rc.8",
     "@genkit-ai/core": "^0.5.0-rc.8",
     "@genkit-ai/dotprompt": "^0.5.0-rc.8",
     "@genkit-ai/flow": "^0.5.0-rc.8",
     "@genkit-ai/vertexai": "^0.5.0-rc.8",
     "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
     "genkit-compose": "file:genkit-compose-0.0.1.tgz",
     "genkit-flow-diagram": "file:genkit-flow-diagram-1.0.0.tgz",
-    "zod": "^3.23.6"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
     "typescript": "^5.4.5"
   }
 }
