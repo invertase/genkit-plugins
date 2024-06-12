@@ -1,6 +1,6 @@
 {
-  "name": "pgvector-retrieval",
-  "version": "1.0.0",
+  "name": "genkitx-pgvector",
+  "version": "0.0.1",
   "description": "",
   "main": "lib/index.js",
   "scripts": {
@@ -9,8 +9,17 @@
     "build": "tsc",
     "build:watch": "tsc --watch"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "genkit",
+    "postgreSQL",
+    "postgres",
+    "pgvector",
+    "genkit-plugin",
+    "genkit-retriever",
+    "genkit-indexer",
+    "genkit-deploy"
+  ],
+  "author": "Invertase <oss@invertase.io> (http://invertase.io)",
   "license": "ISC",
   "dependencies": {
     "@genkit-ai/ai": "^0.5.2",
@@ -20,14 +29,12 @@
     "@genkit-ai/vertexai": "^0.5.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "pg": "^8.12.0",
     "pgvector": "^0.1.8",
     "postgres": "^3.4.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
-    "@types/pg": "^8.11.6",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.4",
     "typescript": "^5.4.5"

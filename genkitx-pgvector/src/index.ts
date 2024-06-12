@@ -9,7 +9,7 @@ import { PgVectorPluginParams } from "./types";
 
 const PLUGIN_NAME = "pgvector";
 
-export function pgVector<EmbedderCustomOptions extends z.ZodTypeAny>(
+export function pgVector(
   params: PgVectorPluginParams<z.ZodTypeAny>[]
 ): PluginProvider {
   const plugin = genkitPlugin(
