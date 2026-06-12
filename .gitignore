@@ -1,4 +1,10 @@
-**/*node_modules
-**/*/lib
+**/node_modules
+**/dist
+**/lib
+**/.turbo
+.turbo
 .DS_Store
 package-lock.json
+*.log
+**/.env
+**/.env.local

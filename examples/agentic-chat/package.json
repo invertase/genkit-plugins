@@ -1,0 +1,40 @@
+{
+  "name": "@genkitx-json-render/example-agentic-chat",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,web -c magenta,cyan \"pnpm dev:server\" \"pnpm dev:web\"",
+    "dev:server": "tsx watch --env-file-if-exists=.env server/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@genkit-ai/express": "^1.36.0",
+    "@genkit-ai/google-genai": "^1.36.0",
+    "@json-render/core": "^0.19.0",
+    "@json-render/react": "^0.19.0",
+    "@json-render/shadcn": "^0.19.0",
+    "genkit": "^1.36.0",
+    "genkitx-json-render": "workspace:*",
+    "lucide-react": "^0.564.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^2.15.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.1",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}

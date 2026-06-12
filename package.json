@@ -1,0 +1,25 @@
+{
+  "name": "genkit-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@10.18.3",
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "clean": "turbo run clean && rm -rf .turbo node_modules/.cache"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
+    "turbo": "^2.9.6",
+    "typescript": "^5.7.3"
+  }
+}

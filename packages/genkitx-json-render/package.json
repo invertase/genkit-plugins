@@ -1,0 +1,53 @@
+{
+  "name": "genkitx-json-render",
+  "version": "0.1.0",
+  "description": "Genkit plugin for streaming structured, schema-validated UI specs that render with json-render. Define a component catalog once and derive the model output schema, the system prompt, and a streaming Genkit flow from it.",
+  "keywords": [
+    "genkit",
+    "genkit-plugin",
+    "genkitx",
+    "json-render",
+    "generative-ui",
+    "genui",
+    "llm",
+    "ai"
+  ],
+  "license": "Apache-2.0",
+  "author": "Invertase",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/invertase/genkit-plugins.git",
+    "directory": "packages/genkitx-json-render"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@json-render/core": ">=0.17.0 <1.0.0",
+    "genkit": "^1.0.0"
+  },
+  "devDependencies": {
+    "@json-render/core": "^0.19.0",
+    "genkit": "^1.32.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.0"
+  }
+}
