@@ -2,14 +2,21 @@ import { defineCatalog } from '@json-render/core';
 import { schema } from '@json-render/react/schema';
 import { shadcnComponentDefinitions as s } from '@json-render/shadcn/catalog';
 import { z } from 'zod';
-import { ICON_NAMES } from './icons';
+import { ICON_NAMES } from './ui/icons';
 
 /**
  * A compact catalog of chat-friendly shadcn components. Shared by the server (the
  * renderUI tool's prompt + validation) and the client (the render registry).
  */
 export const catalog = defineCatalog(schema, {
-  actions: {},
+  actions: {
+    submit: {
+      params: z.object({ values: z.record(z.string(), z.unknown()) }),
+      description:
+        "Submit form values back to the assistant — they arrive as the user's next " +
+        'message. Bind values to the form state: { "values": { "$state": "/form" } }.',
+    },
+  },
   components: {
     Card: s.Card,
     Stack: s.Stack,
@@ -21,6 +28,11 @@ export const catalog = defineCatalog(schema, {
     Table: s.Table,
     Progress: s.Progress,
     Separator: s.Separator,
+    // Form components: fields two-way bind via { $bindState: "/form/<name>" };
+    // a Button fires the `submit` action with the collected /form state.
+    Input: s.Input,
+    Select: s.Select,
+    Button: s.Button,
     Icon: {
       props: z.object({
         name: z.enum(ICON_NAMES),
@@ -47,7 +59,8 @@ export const catalog = defineCatalog(schema, {
       }),
       description:
         'Clickable options for the user to pick from. The chosen value is sent back ' +
-        'to you as the user’s next message — use it to ask the user to decide.',
+        'to you as the user’s next message — use it whenever the user should decide, ' +
+        'instead of asking in prose. Labels and values must be literal strings.',
     },
   },
 });

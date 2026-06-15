@@ -1,5 +1,11 @@
 import type { Catalog, Spec } from '@json-render/core';
-import { type Genkit, type ModelArgument, z } from 'genkit';
+import {
+  type ActionContext,
+  type GenerateOptions,
+  type Genkit,
+  type ModelArgument,
+  z,
+} from 'genkit';
 import {
   applyValidation,
   buildSystem,
@@ -12,6 +18,16 @@ import {
 
 /** Default input schema used when `inputSchema` is omitted: `{ intent: string }`. */
 type DefaultIntentSchema = z.ZodObject<{ intent: z.ZodString }>;
+
+/**
+ * Per-call context passed to {@link RenderToolOptions.onSpec} and
+ * {@link RenderToolOptions.onPartial}. `context` is Genkit's action context —
+ * pass request-scoped values (e.g. a streaming channel) via
+ * `ai.generate({ context })` and read them back here.
+ */
+export interface RenderToolContext {
+  context?: ActionContext;
+}
 
 /** The compact summary the model receives back after the tool renders UI. */
 const ToolResultSchema = z.object({
@@ -40,7 +56,7 @@ export interface RenderToolOptions<I extends z.ZodTypeAny = DefaultIntentSchema>
   /** Intro/rules layered onto the catalog's generated system prompt. */
   instructions?: PromptInstructions;
   /** Model generation config passed straight through to `generateStream`. */
-  config?: Record<string, unknown>;
+  config?: GenerateOptions['config'];
   /** Validate the generated spec against the catalog. Default `'warn'`. */
   validate?: ValidationMode;
   /** Called with any validation issues (in `'warn'` and `'throw'` modes). */
@@ -49,12 +65,14 @@ export interface RenderToolOptions<I extends z.ZodTypeAny = DefaultIntentSchema>
    * Receives the generated spec out-of-band — the host wires this to deliver the
    * spec to the client (the model only gets the compact summary). Throw to abort.
    */
-  onSpec?: (spec: Spec, input: z.infer<I>) => void | Promise<void>;
+  onSpec?: (spec: Spec, input: z.infer<I>, ctx: RenderToolContext) => void | Promise<void>;
   /**
-   * Receives each partial spec as the model streams patches — wire this to push
-   * live, element-by-element updates to the client. Fires before {@link onSpec}.
+   * Receives render-safe partial specs as the model streams patches (dangling
+   * child refs pruned; nothing fires until the root element exists) — wire this
+   * to push live, element-by-element updates to the client. Fires before
+   * {@link onSpec}.
    */
-  onPartial?: (spec: Spec, input: z.infer<I>) => void;
+  onPartial?: (spec: Spec, input: z.infer<I>, ctx: RenderToolContext) => void;
 }
 
 /**
@@ -68,6 +86,11 @@ export interface RenderToolOptions<I extends z.ZodTypeAny = DefaultIntentSchema>
  * so the spec doesn't bloat the conversation; the spec itself is delivered to your
  * host via {@link RenderToolOptions.onSpec}, which forwards it to the client where
  * the same catalog renders it.
+ *
+ * To reach the surrounding request from `onSpec`/`onPartial` (e.g. a streaming
+ * channel), pass values via `ai.generate({ context })` — Genkit propagates the
+ * action context into the tool, and the callbacks receive it as
+ * {@link RenderToolContext}.
  *
  * For a direct "input in, page out" endpoint, see {@link defineRenderFlow}.
  */
@@ -86,18 +109,20 @@ export function defineRenderTool<I extends z.ZodTypeAny = DefaultIntentSchema>(
       inputSchema,
       outputSchema: ToolResultSchema,
     },
-    async (input: z.infer<I>) => {
+    async (input: z.infer<I>, runtime?: { context?: ActionContext; abortSignal?: AbortSignal }) => {
+      const ctx: RenderToolContext = { context: runtime?.context };
       const onPartial = options.onPartial;
       const spec = await streamSpec(ai, {
         model: options.model,
         system,
         prompt: buildPrompt(input),
         config: options.config,
-        onPartial: onPartial ? (partial) => onPartial(partial, input) : undefined,
+        abortSignal: runtime?.abortSignal,
+        onPartial: onPartial ? (partial) => onPartial(partial, input, ctx) : undefined,
       });
 
       applyValidation(options.catalog, spec, mode, options.name, options.onIssues);
-      await options.onSpec?.(spec, input);
+      await options.onSpec?.(spec, input, ctx);
 
       return {
         rendered: true,

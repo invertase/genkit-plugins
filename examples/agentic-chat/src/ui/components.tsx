@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useRespond } from './respond';
+import { useRespond } from '../respond';
 
 const AXIS = 'var(--muted-foreground)';
 const GRID = 'var(--border)';

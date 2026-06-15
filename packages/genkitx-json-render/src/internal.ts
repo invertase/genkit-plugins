@@ -1,5 +1,5 @@
 import { type Catalog, createSpecStreamCompiler, type Spec } from '@json-render/core';
-import { type Genkit, type ModelArgument, z } from 'genkit';
+import { type GenerateOptions, type Genkit, type ModelArgument, z } from 'genkit';
 
 /** What to do when the final spec fails catalog validation. */
 export type ValidationMode = 'off' | 'warn' | 'throw';
@@ -54,9 +54,27 @@ export function resolveInput<I extends z.ZodTypeAny>(
 }
 
 /**
+ * Make a partial spec safe to render: prune child refs to elements that haven't
+ * streamed in yet. Returns `null` while the spec has no resolvable root — i.e.
+ * nothing renderable yet. Does not mutate the input.
+ */
+export function sanitizePartialSpec(spec: Spec): Spec | null {
+  const els = spec.elements ?? {};
+  if (!spec.root || !(spec.root in els)) return null;
+  const elements: Spec['elements'] = {};
+  for (const [key, el] of Object.entries(els)) {
+    elements[key] = el.children
+      ? { ...el, children: el.children.filter((child) => child in els) }
+      : el;
+  }
+  return { ...spec, elements };
+}
+
+/**
  * Stream the model's JSONL patch output through json-render's compiler, building
- * a `Spec`. `onPartial` fires with the current spec each time a patch lands —
- * the flow wires it to `sendChunk`; the tool leaves it unset.
+ * a `Spec`. `onPartial` fires with a render-safe partial (see
+ * {@link sanitizePartialSpec}) each time a patch lands — the flow wires it to
+ * `sendChunk`; the tool wires it to its own `onPartial` option.
  */
 export async function streamSpec(
   ai: Genkit,
@@ -64,7 +82,8 @@ export async function streamSpec(
     model: ModelArgument;
     system: string;
     prompt: string;
-    config?: Record<string, unknown>;
+    config?: GenerateOptions['config'];
+    abortSignal?: AbortSignal;
     onPartial?: (spec: Spec) => void;
   },
 ): Promise<Spec> {
@@ -74,13 +93,17 @@ export async function streamSpec(
     system: params.system,
     prompt: params.prompt,
     ...(params.config ? { config: params.config } : {}),
+    ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
   });
 
   for await (const chunk of stream) {
     const text = chunk.text;
     if (!text) continue;
     const { result, newPatches } = compiler.push(text);
-    if (newPatches.length > 0) params.onPartial?.(result);
+    if (newPatches.length > 0 && params.onPartial) {
+      const safe = sanitizePartialSpec(result);
+      if (safe) params.onPartial(safe);
+    }
   }
 
   // Surface any generation error and apply trailing text not seen as a chunk.

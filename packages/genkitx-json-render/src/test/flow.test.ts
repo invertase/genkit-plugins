@@ -7,6 +7,7 @@ import { defineRenderFlow } from '../flow.js';
 interface Captured {
   system?: string;
   prompt?: string;
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -17,9 +18,10 @@ interface Captured {
 function fakeAi(chunks: string[], captured: Captured = {}): Genkit {
   return {
     defineFlow: (_config: unknown, handler: unknown) => handler,
-    generateStream: (opts: { system?: string; prompt?: string }) => {
+    generateStream: (opts: { system?: string; prompt?: string; abortSignal?: AbortSignal }) => {
       captured.system = opts.system;
       captured.prompt = opts.prompt;
+      captured.abortSignal = opts.abortSignal;
       return {
         stream: (async function* stream() {
           for (const c of chunks) yield { text: c };
@@ -75,17 +77,38 @@ describe('defineRenderFlow', () => {
     expect(result.elements['hero-1']).toMatchObject({ type: 'Hero', props: { headline: 'Hi' } });
   });
 
-  test('streams a partial spec as each patch arrives', async () => {
+  test('streams a render-safe partial spec as each patch arrives', async () => {
     const flow = defineRenderFlow(fakeAi(PATCHES), {
       name: 't',
       catalog: fakeCatalog(),
       model: 'fake/model',
     });
     const { chunks } = await run(flow, { prompt: 'x' });
-    expect(chunks.length).toBe(3);
-    // root first, then one element per subsequent patch
+    // the root-only patch is skipped (nothing renderable yet); then one chunk per element
+    expect(chunks.length).toBe(2);
     expect(chunks[0]).toMatchObject({ root: 'hero-1' });
-    expect(Object.keys(chunks[2]?.elements ?? {})).toEqual(['hero-1', 'cta-1']);
+    expect(Object.keys(chunks[0]?.elements ?? {})).toEqual(['hero-1']);
+    expect(Object.keys(chunks[1]?.elements ?? {})).toEqual(['hero-1', 'cta-1']);
+  });
+
+  test('streamed partials prune child refs to not-yet-streamed elements', async () => {
+    const flow = defineRenderFlow(
+      fakeAi([
+        '{"op":"add","path":"/root","value":"stack-1"}\n',
+        '{"op":"add","path":"/elements/stack-1","value":{"type":"Stack","props":{},"children":["a-1","b-1"]}}\n',
+        '{"op":"add","path":"/elements/a-1","value":{"type":"Text","props":{"text":"A"}}}\n',
+        '{"op":"add","path":"/elements/b-1","value":{"type":"Text","props":{"text":"B"}}}\n',
+      ]),
+      { name: 't', catalog: fakeCatalog(), model: 'fake/model' },
+    );
+    const { result, chunks } = await run(flow, { prompt: 'x' });
+    expect(chunks.map((c) => c.elements['stack-1']?.children)).toEqual([
+      [],
+      ['a-1'],
+      ['a-1', 'b-1'],
+    ]);
+    // the final returned spec is the compiler's full output, not a pruned partial
+    expect(result.elements['stack-1']?.children).toEqual(['a-1', 'b-1']);
   });
 
   test('default input: uses { prompt } as the user message and catalog prompt as system', async () => {
@@ -155,6 +178,22 @@ describe('defineRenderFlow', () => {
     );
     await run(flow, { prompt: 'x' });
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  test('forwards the request abortSignal to generateStream', async () => {
+    const captured: Captured = {};
+    const flow = defineRenderFlow(fakeAi(PATCHES, captured), {
+      name: 't',
+      catalog: fakeCatalog(),
+      model: 'fake/model',
+    });
+    const signal = new AbortController().signal;
+    const handler = flow as unknown as (
+      input: unknown,
+      side: { sendChunk: (s: Spec) => void; abortSignal?: AbortSignal },
+    ) => Promise<Spec>;
+    await handler({ prompt: 'x' }, { sendChunk: () => {}, abortSignal: signal });
+    expect(captured.abortSignal).toBe(signal);
   });
 
   test('before hook runs and can abort by throwing', async () => {

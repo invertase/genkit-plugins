@@ -23,7 +23,6 @@ export const landingPage = defineRenderFlow(ai, {
       'Keep copy punchy and specific to the pitch.',
     ],
   },
-  validate: 'warn',
 });
 
 const port = Number(process.env.PORT ?? 3400);

@@ -1,5 +1,5 @@
 import type { Catalog, Spec } from '@json-render/core';
-import { type Genkit, type ModelArgument, z } from 'genkit';
+import { type GenerateOptions, type Genkit, type ModelArgument, z } from 'genkit';
 import {
   applyValidation,
   buildSystem,
@@ -40,7 +40,7 @@ export interface RenderFlowOptions<I extends z.ZodTypeAny = DefaultInputSchema> 
   /** Intro/rules layered onto the catalog's generated system prompt. */
   instructions?: PromptInstructions;
   /** Model generation config passed straight through to `generateStream`. */
-  config?: Record<string, unknown>;
+  config?: GenerateOptions['config'];
   /** Validate the final spec against the catalog. Default `'warn'`. */
   validate?: ValidationMode;
   /**
@@ -61,8 +61,10 @@ export interface RenderFlowOptions<I extends z.ZodTypeAny = DefaultInputSchema> 
  * The model emits json-render's JSONL patch stream (driven by `catalog.prompt()`);
  * the flow compiles those patches into a `Spec`, streaming each partial through
  * `sendChunk` for the client `Renderer`, and validates the final spec with
- * `catalog.validate()`. Prompt, spec shape, and validation all come from the
- * catalog you also render with — one source of truth.
+ * `catalog.validate()`. Streamed partials are render-safe: nothing is emitted
+ * until the root element exists, and child refs to not-yet-streamed elements are
+ * pruned. Prompt, spec shape, and validation all come from the catalog you also
+ * render with — one source of truth.
  *
  * For the common single-string case, omit `inputSchema`/`buildPrompt`: the flow
  * takes `{ prompt: string }` and uses it as the user message.
@@ -85,7 +87,7 @@ export function defineRenderFlow<I extends z.ZodTypeAny = DefaultInputSchema>(
       streamSchema: z.custom<Spec>(),
       outputSchema: z.custom<Spec>(),
     },
-    async (input, { context, sendChunk }) => {
+    async (input, { context, sendChunk, abortSignal }) => {
       await options.before?.(input, { context });
 
       const spec = await streamSpec(ai, {
@@ -93,6 +95,7 @@ export function defineRenderFlow<I extends z.ZodTypeAny = DefaultInputSchema>(
         system,
         prompt: buildPrompt(input),
         config: options.config,
+        abortSignal,
         onPartial: (partial) => sendChunk(partial),
       });
 

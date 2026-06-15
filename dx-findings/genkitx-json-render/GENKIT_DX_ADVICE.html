@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Genkit DX Audit — generative UI gaps from genkitx-json-render</title>
+<style>
+  :root {
+    --bg: #fcfcfb;
+    --fg: #1c1c1a;
+    --muted: #6b6b66;
+    --accent: #c2410c;
+    --accent-soft: #fff7ed;
+    --border: #e7e5e0;
+    --code-bg: #f4f3f0;
+    --good: #15803d;
+    --good-soft: #f0fdf4;
+    --warn: #b45309;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 56px 24px 120px; }
+  h1 { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 8px; }
+  h2 { font-size: 21px; letter-spacing: -0.01em; margin: 56px 0 12px; padding-top: 24px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 28px 0 8px; }
+  p, li { color: var(--fg); }
+  .sub { color: var(--muted); margin: 0 0 32px; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; border-radius: 999px; padding: 2px 10px; margin-right: 8px;
+    vertical-align: 2px;
+  }
+  .p1 { background: #fef2f2; color: #b91c1c; }
+  .p2 { background: var(--accent-soft); color: var(--accent); }
+  .p3 { background: #f5f5f4; color: var(--muted); }
+  code, pre {
+    font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  code { background: var(--code-bg); border-radius: 4px; padding: 1px 5px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; margin: 12px 0;
+  }
+  pre code { background: none; padding: 0; }
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .cmp { grid-template-columns: 1fr; } }
+  .cmp > div > .label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 4px;
+  }
+  blockquote {
+    margin: 16px 0; padding: 10px 16px; border-left: 3px solid var(--accent);
+    background: var(--accent-soft); border-radius: 0 8px 8px 0; color: #7c2d12;
+  }
+  blockquote p { margin: 0; }
+  .good {
+    margin: 16px 0; padding: 10px 16px; border-left: 3px solid var(--good);
+    background: var(--good-soft); border-radius: 0 8px 8px 0;
+  }
+  .good p { margin: 0; color: #166534; }
+  .status {
+    margin: 16px 0; padding: 10px 16px; border-left: 3px solid #2563eb;
+    background: #eff6ff; border-radius: 0 8px 8px 0; font-size: 14px;
+  }
+  .status p { margin: 0; color: #1e3a8a; }
+  .status .label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: #2563eb; display: block; margin-bottom: 2px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  a { color: var(--accent); }
+  .toc { font-size: 14px; padding: 16px 20px; background: var(--code-bg); border-radius: 10px; }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .meta { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Genkit DX audit — generative UI gaps found in production-style integration work</h1>
+<p class="sub">
+  Audience: Genkit maintainers and product owners. This is a sharp DX audit from
+  building <code>genkitx-json-render</code> (schema-validated generative UI specs
+  streamed from Genkit) plus two working apps: <code>landing-page</code> and
+  <code>agentic-chat</code>. The goal is not to argue that Genkit cannot do this —
+  it can — but to show where product builders currently have to invent framework
+  code that Genkit should own.
+</p>
+
+<div class="toc">
+  <ol>
+    <li><a href="#readout">Executive readout</a></li>
+    <li><a href="#side-channel">Tool calls cannot emit client-visible data parts</a></li>
+    <li><a href="#react">No product-grade React client layer</a></li>
+    <li><a href="#sessions">No HTTP session primitive preserves tool history</a></li>
+    <li><a href="#abort">Cancellation exists, but discoverability failed the test</a></li>
+    <li><a href="#context">ActionContext is untyped</a></li>
+    <li><a href="#formats">Custom output formats can't carry config</a></li>
+    <li><a href="#zod">The zod v3/v4 split</a></li>
+    <li><a href="#middleware">Flow middleware is fragmented</a></li>
+    <li><a href="#good">What worked well</a></li>
+    <li><a href="#actions">Recommended Google actions</a></li>
+  </ol>
+</div>
+
+<h2 id="readout">Executive readout</h2>
+<p>
+  Genkit is a good substrate for generative UI: flows stream cleanly, model choice is
+  composable, action context reaches tools, and <code>startFlowServer</code> makes a
+  prototype feel real quickly. The gaps below are therefore product gaps, not dead
+  ends. They are the places where a serious app has to rebuild client runtime,
+  session transport, artifact streaming, and request plumbing around Genkit.
+</p>
+<p>
+  The competitive comparison is direct: AI SDK-style data parts and client hooks make
+  product UI feel first-class. Genkit's model/tool/flow primitives are strong, but the
+  HTTP + React + multi-turn path still asks every team to rediscover the same
+  patterns. This repo is concrete evidence: the plugin and examples work, but several
+  files exist mainly to bridge missing platform affordances.
+</p>
+<blockquote><p>
+  Recommendation: prioritize client-visible tool data parts, a React client layer, and
+  HTTP sessions with full tool history. Those three remove the largest amount of
+  custom host code and make Genkit credible for agentic product UI without requiring
+  every app to adopt the full Agents runtime up front.
+</p></blockquote>
+
+<h2 id="side-channel"><span class="pill p1">P0</span>Tool calls cannot emit client-visible data parts</h2>
+<p>
+  <strong>Impact:</strong> this is the blocking gap for agentic product UI. A tool
+  often produces a large artifact — a UI spec, chart, form, report, preview, map —
+  that belongs in the client, not in the model transcript. Genkit has no sanctioned
+  channel for that artifact today. Tool functions receive <code>ActionFnArg&lt;never&gt;</code>;
+  <code>sendChunk</code> is typed <code>never</code>, so tools structurally cannot
+  stream client-visible data.
+</p>
+<p><strong>Evidence from this repo:</strong> the chat example ships a three-layer side channel:</p>
+<ul>
+  <li>Plugin invents <code>onSpec</code>/<code>onPartial</code> callbacks to smuggle the artifact out of the tool.</li>
+  <li>The host flow invents a <code>ChatChunk</code> discriminated union to multiplex text deltas and specs over <code>sendChunk</code>.</li>
+  <li>The per-request streaming channel reaches the tool by stuffing a function into
+      <code>ai.generateStream({ context })</code> — which works (context propagates to
+      tools) but is undocumented as a pattern, and we initially shipped an
+      <code>AsyncLocalStorage</code> workaround before discovering it.</li>
+</ul>
+<div class="cmp">
+  <div>
+    <div class="label">Today (host flow)</div>
+<pre><code>const chatChannel = { send: sendChunk, specs: [] };
+const { stream } = ai.generateStream({
+  tools: [renderUI],
+  // smuggle a *function* through action context
+  context: { ...context, chat: chatChannel },
+});
+// tool callback digs it back out:
+onSpec: (spec, _i, { context }) =&gt;
+  (context?.chat as ChatChannel)?.send(...)</code></pre>
+  </div>
+  <div>
+    <div class="label">Wishlist</div>
+<pre><code>ai.defineTool({ ... },
+  async (input, { sendChunk }) =&gt; {
+    // typed tool streaming, surfaced as
+    // tagged chunks in generateStream's
+    // stream alongside text/tool events
+    sendChunk({ type: 'ui', spec });
+    return summary;
+  });</code></pre>
+  </div>
+</div>
+<blockquote><p>
+  Ask: typed tool streaming, or custom data parts, surfaced in
+  <code>generateStream</code>'s chunk stream so a flow can forward them. This is the
+  Vercel AI SDK's "data parts" — its single biggest DX edge for UI work. It would
+  delete the plugin's callback plumbing, the chunk union, and the context smuggling.
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  Being actively designed, Go-first, under the <em>Agents</em> umbrella.
+  <a href="https://github.com/firebase/genkit/pull/4797">#4797</a> (open, exp) adds
+  <code>tool.SendPartial</code> — partial tool responses surfaced as
+  <code>ModelResponseChunk</code>s with <code>Part.IsPartial()</code>. The session-flow
+  design (<a href="https://github.com/firebase/genkit/issues/4467">RFC #4467</a>) adds a
+  <code>Responder</code> with <code>SendArtifact</code> / <code>SendStatus</code> —
+  artifacts are named part collections persisted to the session and forwarded to the
+  client, which is precisely the spec-out-of-band shape. JS side:
+  <a href="https://github.com/firebase/genkit/pull/5424">#5424</a> (closed prototype,
+  Jun 2026) wires an <code>AgentEvent</code> union with <code>artifact-emitted</code>
+  and <code>status</code> variants end-to-end. So: the concept is validated, but it's
+  arriving via Agents/sessions, not plain <code>generateStream</code>. The product
+  risk is forcing teams that only need tool artifacts to adopt the full agent runtime.
+  The tool-level primitive should exist independently.
+</p></div>
+
+<h2 id="react"><span class="pill p1">P1</span>No product-grade React client layer</h2>
+<p>
+  <strong>Impact:</strong> <code>genkit/beta/client</code>'s
+  <code>streamFlow</code> is a bare async iterator. That is a solid transport primitive,
+  but it is not the product UI abstraction developers compare against AI SDK. Every
+  Genkit + React app now has to write the same state machine around streaming,
+  cancellation, optimistic turns, retries, and stable callbacks.
+</p>
+<p><strong>Evidence from this repo:</strong> the chat example needed ~100 lines of client runtime code:</p>
+<ul>
+  <li>Accumulate deltas, flush snapshots into state per chunk.</li>
+  <li>A ref mirror of conversation state so the send callback stays referentially stable
+      (it feeds a context provider — naïve deps re-render every consumer per token).</li>
+  <li>A synchronous in-flight ref, because a state-based <code>busy</code> guard has a
+      double-submit race until the next render.</li>
+  <li>An abort controller plus an "alive" ref so unmount cancels the request and stops
+      stale state writes.</li>
+</ul>
+<blockquote><p>
+  Ask: ship <code>@genkit-ai/react</code> with <code>useFlow</code> /
+  <code>useChat</code>-style hooks that own these patterns. For product builders, this
+  is not sugar; it is the first surface they touch and the first comparison they make.
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  In flight on two fronts.
+  <a href="https://github.com/firebase/genkit/pull/4803">RFC #4803 "Genkit Client"</a>
+  (Ehesp, draft Feb 2026) proposes exactly this list: client factory with shared
+  config, end-to-end type inference from server flow schemas, retry/backoff, React
+  hooks, Vue composables, and a client-side chat primitive — its motivation section
+  matches our findings nearly point-for-point. And
+  <a href="https://github.com/firebase/genkit/pull/5424">#5424</a> prototyped a
+  framework-agnostic <code>AgentSession</code> core with thin React and Angular
+  adapters (11 React sample pages validated). Direction is right; add this chat
+  example's concrete bug list (stable-callback ref mirror, double-submit race, unmount
+  teardown) to the RFC as evidence.
+</p></div>
+
+<h2 id="sessions"><span class="pill p1">P1</span>No HTTP session primitive preserves tool history</h2>
+<p>
+  <strong>Impact:</strong> multi-turn product UI needs durable chat state, resumable
+  streams, and complete model history, including tool calls and tool results.
+  <code>ai.chat()</code> + session stores exist (beta, server-side), but
+  <code>startFlowServer</code> exposes none of it. That leaves HTTP apps with a
+  manually reconstructed transcript, which is exactly where agentic UI loses memory.
+</p>
+<p>
+  <strong>Evidence from this repo:</strong> the chat example hand-rolls a
+  <code>history</code> array in the input schema, client-side history reconstruction,
+  and role/content mapping into <code>messages</code>. The immediate consequence:
+  tool calls and tool results are dropped from replayed history, so the model forgets
+  what it rendered. "Make that chart a line chart" only works as well as the model's
+  own prose recap.
+</p>
+<blockquote><p>
+  Ask: expose sessions through the flow server — session id in/out, pluggable store,
+  full <code>ai.Message</code> history — or at minimum publish a multi-turn HTTP recipe
+  that preserves tool request/response pairs.
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  This is the most active area of the repo.
+  <a href="https://github.com/firebase/genkit/issues/4467">RFC #4467 "Session
+  flows"</a>: stateful multi-turn flows with snapshot persistence, pluggable
+  <code>SessionStore</code>, client-managed <em>or</em> server-managed state, and
+  resumable timelines — built on bidirectional streaming
+  (<a href="https://github.com/firebase/genkit/pull/4184">Go RFC #4184</a>,
+  <a href="https://github.com/firebase/genkit/pull/4210">JS RFC #4210</a>,
+  JS implementation <a href="https://github.com/firebase/genkit/pull/4288">#4288</a>
+  open and updated 2026-06-11). Go is ahead: session flows already renamed/unified as
+  "agents" (<a href="https://github.com/firebase/genkit/pull/5234">#5234</a>, merged),
+  background detach shipped (<a href="https://github.com/firebase/genkit/pull/5193">#5193</a>).
+  Notably, <code>SessionState.Messages</code> is full <code>ai.Message</code> history —
+  tool request/response pairs included — which fixes exactly the "model forgets what it
+  rendered" problem. This repo's hand-rolled history is the interim shape to migrate off.
+</p></div>
+
+<h2 id="abort"><span class="pill p2">P2</span>Cancellation exists, but discoverability failed the test</h2>
+<p>
+  <strong>Impact:</strong> cancellation is already available, but not discoverable
+  enough to function as platform DX. The first version of this audit claimed
+  <code>streamFlow</code> accepts no <code>AbortSignal</code>. Wrong: Genkit 1.36's
+  client signature is
+  <code>streamFlow({ url, input, streamId?, headers?, abortSignal? })</code>, and the
+  server chain is complete: flows receive <code>abortSignal</code>,
+  <code>GenerateOptions</code> takes it, and the plugin forwards it.
+</p>
+<p>
+  <strong>Evidence from this repo:</strong> the integration was built while reading
+  typings and still shipped a bail-out-flag workaround first, because nothing in the
+  docs or examples surfaced cancellation or <code>streamId</code> resumable streams.
+  An API that exists but is not discoverable costs the same as one that does not exist
+  for humans and coding agents alike.
+</p>
+<blockquote><p>
+  Ask: document the cancellation story end-to-end (client abort → express handler →
+  flow signal → model call), show it in React examples, and verify the express adapter
+  actually cancels the flow on client disconnect. Recent merges suggest active
+  hardening here:
+  <a href="https://github.com/firebase/genkit/pull/5435">#5435</a> (propagate reader
+  cancellation to the source, Jun 3) and
+  <a href="https://github.com/firebase/genkit/pull/5481">#5481</a> (harden streaming in
+  express/fetch handlers, Jun 10).
+</p></blockquote>
+
+<h2 id="context"><span class="pill p2">P2</span>ActionContext is untyped</h2>
+<p>
+  <strong>Impact:</strong> action context is the right place for request-scoped values,
+  but TypeScript cannot help providers and consumers agree on what is present.
+  <code>ActionContext = Record&lt;string, any&gt;</code>, which means the moment a project
+  depends on context, it loses type safety at the Genkit boundary.
+</p>
+<p>
+  <strong>Evidence from this repo:</strong> the plugin hand-declares
+  <code>context?.rawRequest?.ip</code> to give its <code>before</code> hook something
+  usable; the chat example casts <code>context?.chat as ChatChannel</code>. Both are
+  type assertions over contracts Genkit actually controls.
+</p>
+<blockquote><p>
+  Ask: a generic parameter or module-augmentation point for context
+  (<code>Genkit&lt;TContext&gt;</code> or <code>declare module</code> merging), so
+  context providers and consumers share one type.
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  No open issues or PRs found. Genuinely unclaimed — good candidate for a fresh issue
+  (or contribution; it's additive and non-breaking via an optional generic).
+</p></div>
+
+<h2 id="formats"><span class="pill p3">P3</span>Custom output formats can't carry config</h2>
+<p>
+  <strong>Impact:</strong> Genkit has a promising output-format abstraction, but it is
+  not configurable enough for catalog-driven formats. json-render's spec keeps
+  elements as a keyed map and streams as JSONL patches, so strict structured output
+  does not fit. That is fine — this is exactly what <code>defineFormat</code> should
+  be able to cover.
+</p>
+<p>
+  <strong>Evidence from this repo:</strong> a format handler only receives a JSON
+  schema; there is no way to pass the <em>catalog</em> (which owns the prompt, patch
+  protocol, and validator) per call. So the plugin bypasses the output system entirely
+  and does raw text + its own compiler, losing <code>output.format</code>
+  composability with <code>generate</code>, prompts, and evals.
+</p>
+<blockquote><p>
+  Ask: let formats accept arbitrary per-call config —
+  <code>output: { format: 'json-render', config: { catalog } }</code> — handed to the
+  format handler. Then "spec" becomes a first-class output type instead of a sidecar.
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  No activity on format config. Adjacent: <a
+  href="https://github.com/firebase/genkit/pull/5371">#5371</a> (merged May 2026) added
+  <code>annotateSchema</code> for UI-specific metadata on schemas — signals appetite
+  for richer schema/output metadata, but not this. Unclaimed.
+</p></div>
+
+<h2 id="zod"><span class="pill p3">P3</span>The zod v3/v4 split</h2>
+<p>
+  <strong>Impact:</strong> Genkit re-exports zod v3 while much of the surrounding
+  TypeScript ecosystem, json-render included, is on zod v4. This turns schema sharing
+  into a compatibility problem for plugin authors.
+</p>
+<p>
+  <strong>Evidence from this repo:</strong> the plugin survives only because it never
+  hands Genkit a json-render schema; the boundary is plain text. Any plugin that
+  <em>does</em> need to share schemas across that line is stuck converting or pinning.
+</p>
+<blockquote><p>
+  Ask: zod v4 support (or schema-library-agnostic boundaries — accept Standard Schema).
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  Tracked in <a href="https://github.com/firebase/genkit/issues/3470">#3470</a>.
+  Maintainer (pavelgj, Feb 2026): zod v4 is <em>planned for the Genkit 2.0 release</em>
+  as a breaking change, "no solid ETA yet, but we are starting to feel the need
+  ourselves." Plan for the plugin's text-boundary workaround to remain necessary until
+  2.0.
+</p></div>
+
+<h2 id="middleware"><span class="pill p3">P3</span>Flow middleware is fragmented</h2>
+<p>
+  <strong>Impact:</strong> auth, quota, kill switches, and request enrichment should be
+  portable across adapters. Today they have three partial homes: express
+  <code>contextProvider</code>s, Firebase <code>onCallGenkit</code> policies, and
+  nothing portable at the flow level.
+</p>
+<p>
+  <strong>Evidence from this repo:</strong> the plugin grew its own
+  <code>before</code> hook. It works, but every plugin inventing its own hook shape is
+  the symptom.
+</p>
+<blockquote><p>
+  Ask: a flow-level middleware/interceptor API (request in → context out, throw to
+  reject) that the express and Firebase adapters both honor.
+</p></blockquote>
+<div class="status"><span class="label">Upstream status — checked 2026-06-12</span><p>
+  No direct work found. If anything the surface is growing:
+  <a href="https://github.com/firebase/genkit/pull/5477">#5477</a> (merged Jun 2026)
+  added a fastify adapter — a third server adapter with its own context/auth wiring,
+  which makes a portable middleware layer more valuable, not less. Unclaimed.
+</p></div>
+
+<h2 id="good"><span class="pill p3">✓</span>What worked well</h2>
+<div class="good"><p>
+  These are the primitives that made the integration worth building on Genkit:
+</p></div>
+<ul>
+  <li><strong>Context propagation into tools.</strong> <code>generate({ context })</code>
+      reaching tool functions is what let us delete the <code>AsyncLocalStorage</code>
+      hack. It just needs documentation as the blessed pattern for per-request tool deps.</li>
+  <li><strong>Flow streaming ergonomics.</strong> <code>defineFlow</code> +
+      <code>streamSchema</code> + <code>sendChunk</code> made "stream partial specs" a
+      ten-line job. <code>streamingRequested</code> is a nice touch.</li>
+  <li><strong><code>abortSignal</code> plumbing.</strong> Already present from
+      <code>streamFlow</code> through flows and <code>GenerateOptions</code>; it needs
+      documentation and examples more than a new primitive.</li>
+  <li><strong><code>ModelArgument</code></strong> — passing
+      <code>googleAI.model('gemini-2.5-flash')</code> straight through the plugin
+      without caring what it is.</li>
+  <li><strong><code>startFlowServer</code></strong> — flow to HTTP endpoint in one call;
+      both example servers are ~100 lines including all app logic.</li>
+</ul>
+
+<h2 id="actions">Recommended Google actions</h2>
+<ul>
+  <li><strong>Ship client-visible tool data parts outside the full Agents runtime.</strong>
+      Agents should support artifacts, but plain <code>generateStream</code> tools need
+      the same primitive so apps can adopt it incrementally.</li>
+  <li><strong>Publish the React client layer with the real failure modes covered.</strong>
+      Use this repo's stable-callback ref mirror, double-submit guard, abort-on-unmount,
+      and streamed artifact state as acceptance tests for <code>useFlow</code> /
+      <code>useChat</code>.</li>
+  <li><strong>Expose HTTP sessions that preserve tool history.</strong> The session
+      store must retain full <code>ai.Message</code> history, not a flattened text
+      transcript, or agentic UI will forget the artifacts it created.</li>
+  <li><strong>Document action context propagation immediately.</strong> It already
+      works and deleted an <code>AsyncLocalStorage</code> workaround here; make it a
+      blessed recipe for per-request tool dependencies.</li>
+  <li><strong>File/design the unclaimed additive gaps.</strong> Typed
+      <code>ActionContext</code>, per-call format config, and portable flow middleware
+      are smaller than Agents/client work but unlock cleaner plugin architecture.</li>
+</ul>
+
+<h2>Priority table</h2>
+<table>
+  <thead><tr><th>Priority</th><th>Gap</th><th>Ask</th><th>Upstream (2026-06-12)</th></tr></thead>
+  <tbody>
+    <tr><td>P0</td><td>No tool→client streaming</td><td>Typed tool data parts in <code>generateStream</code></td><td>In design: Go <code>tool.SendPartial</code> (#4797), <code>SendArtifact</code>/<code>SendStatus</code> in Agents RFC; JS prototype #5424</td></tr>
+    <tr><td>P1</td><td>No React client layer</td><td><code>@genkit-ai/react</code> hooks</td><td>RFC #4803 (client SDK + hooks, draft); #5424 React/Angular adapters prototyped</td></tr>
+    <tr><td>P1</td><td>No HTTP sessions/tool history</td><td>Sessions via flow server with full <code>ai.Message</code> history</td><td>Most active area: RFCs #4467/#4468, JS bidi impl #4288 in flight, Go shipped experimentally</td></tr>
+    <tr><td>P2</td><td>Cancellation discoverability</td><td>Document it; verify express end-to-end</td><td>Exists in 1.36 (<code>abortSignal</code>, <code>streamId</code>); teardown hardening #5435, #5481 just merged</td></tr>
+    <tr><td>P2</td><td>Untyped context</td><td>Typed/augmentable <code>ActionContext</code></td><td>No activity — unclaimed, file it</td></tr>
+    <tr><td>P3</td><td>Formats can't take config</td><td>Per-call format config</td><td>No activity — unclaimed, file it</td></tr>
+    <tr><td>P3</td><td>zod v3 only</td><td>zod v4 / Standard Schema</td><td>#3470: planned for Genkit 2.0, no ETA</td></tr>
+    <tr><td>P3</td><td>Middleware fragmentation</td><td>Portable flow middleware</td><td>No activity; new fastify adapter (#5477) widens the surface</td></tr>
+  </tbody>
+</table>
+
+<h2>Migration implications for genkitx-json-render</h2>
+<ul>
+  <li><strong>Native tool data parts would delete the tool side channel.</strong>
+      <code>defineRenderTool</code>'s <code>onSpec</code>/<code>onPartial</code>
+      callbacks, host <code>ChatChunk</code> union, and context-smuggled streaming
+      channel could collapse into one Genkit artifact/data-part stream.</li>
+  <li><strong>React hooks would shrink the examples substantially.</strong> The
+      hand-rolled stream loop, stable callback mirrors, in-flight guard, and unmount
+      cancellation in <code>agentic-chat</code> are framework code, not app logic.</li>
+  <li><strong>HTTP sessions would make rendered UI editable across turns.</strong>
+      Preserving tool request/response pairs fixes the current "model forgets what it
+      rendered" limitation and gives artifacts a real conversational identity.</li>
+  <li><strong>Format config would most change the plugin architecture.</strong> The
+      JSONL compiler could become a first-class Genkit output format parameterized by
+      the json-render catalog, instead of a raw-text sidecar around <code>generate</code>.</li>
+  <li><strong>Watch:</strong> JS bidi implementation
+      <a href="https://github.com/firebase/genkit/pull/4288">#4288</a> (active as of
+      yesterday) — when it lands, <code>defineRenderTool</code>'s
+      <code>onSpec</code>/<code>onPartial</code> should grow a native transport, and
+      the Artifact concept maps 1:1 onto a rendered spec.</li>
+</ul>
+
+<p class="meta">
+  Prepared for Genkit maintainers from <code>packages/genkitx-json-render</code>,
+  <code>examples/landing-page</code>, and <code>examples/agentic-chat</code> in this
+  repo. Genkit 1.36.0, @json-render 0.19.0. Upstream survey:
+  github.com/firebase/genkit issues/PRs as of 2026-06-12.
+</p>
+
+</main>
+</body>
+</html>

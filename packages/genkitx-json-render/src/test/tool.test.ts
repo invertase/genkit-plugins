@@ -32,7 +32,10 @@ function fakeCatalog(): Catalog {
       const s = spec as Spec;
       return s?.root
         ? { success: true, data: s }
-        : { success: false, error: { issues: [{ path: ['root'], message: 'Required' }] } };
+        : {
+            success: false,
+            error: { issues: [{ path: ['root'], message: 'Required' }] },
+          };
     },
   } as unknown as Catalog;
 }
@@ -64,7 +67,9 @@ describe('defineRenderTool', () => {
       catalog: fakeCatalog(),
       model: 'fake/model',
     });
-    const result = await callTool<ToolResult>(tool, { intent: 'a landing page' });
+    const result = await callTool<ToolResult>(tool, {
+      intent: 'a landing page',
+    });
     expect(result).toEqual({ rendered: true, elementCount: 2, root: 'hero-1' });
   });
 
@@ -84,7 +89,7 @@ describe('defineRenderTool', () => {
     expect(Object.keys(captured?.elements ?? {})).toEqual(['hero-1', 'cta-1']);
   });
 
-  test('onPartial fires for each patch with a growing spec', async () => {
+  test('onPartial fires with render-safe, growing partials', async () => {
     const partials: number[] = [];
     const tool = defineRenderTool(fakeAi(PATCHES), {
       name: 'renderUI',
@@ -94,10 +99,28 @@ describe('defineRenderTool', () => {
       onPartial: (spec) => partials.push(Object.keys(spec.elements ?? {}).length),
     });
     await callTool(tool, { intent: 'x' });
-    // one partial per applied patch; element count is non-decreasing and ends at 2
-    expect(partials.length).toBe(3);
-    expect(partials).toEqual([...partials].sort((a, b) => a - b));
-    expect(partials.at(-1)).toBe(2);
+    // the root-only patch is skipped (nothing renderable yet); then one per element
+    expect(partials).toEqual([1, 2]);
+  });
+
+  test('onSpec and onPartial receive the action context from the tool runtime', async () => {
+    const seen: unknown[] = [];
+    const tool = defineRenderTool(fakeAi(PATCHES), {
+      name: 'renderUI',
+      description: 'render a UI',
+      catalog: fakeCatalog(),
+      model: 'fake/model',
+      onPartial: (_spec, _input, ctx) => seen.push(ctx.context),
+      onSpec: (_spec, _input, ctx) => seen.push(ctx.context),
+    });
+    const context = { chat: { send: () => {} } };
+    const handler = tool as unknown as (
+      input: unknown,
+      runtime: { context?: Record<string, unknown> },
+    ) => Promise<unknown>;
+    await handler({ intent: 'x' }, { context });
+    expect(seen.length).toBe(3); // 2 partials + 1 final
+    for (const c of seen) expect(c).toBe(context);
   });
 
   test('default intent field is used as the generation prompt', async () => {

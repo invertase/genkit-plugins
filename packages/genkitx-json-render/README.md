@@ -132,6 +132,10 @@ export const { registry } = defineRegistry(catalog, {
 ### `defineRenderFlow(ai, options)`
 
 Returns a Genkit flow (`streamSchema`/`outputSchema` are the json-render `Spec`).
+Streamed chunks are **render-safe**: nothing is emitted until the root element
+exists, and child refs to not-yet-streamed elements are pruned — so each chunk
+can go straight to `<Renderer>`. The flow's `abortSignal` is forwarded to
+`generateStream`, so cancelling the request cancels generation.
 
 | Option | Type | |
 | --- | --- | --- |
@@ -145,6 +149,30 @@ Returns a Genkit flow (`streamSchema`/`outputSchema` are the json-render `Spec`)
 | `validate?` | `'off' \| 'warn' \| 'throw'` | Default `'warn'`. |
 | `onIssues?` | `(issues, spec) => void` | Overrides the default `'warn'` log. |
 | `before?` | `(input, ctx) => void \| Promise` | Runs before generation; throw to abort. |
+
+### `defineRenderTool(ai, options)`
+
+Returns a Genkit tool the model calls mid-conversation to render UI. The model
+gets back a compact summary (`{ rendered, elementCount, root }`); the spec itself
+is delivered out-of-band:
+
+| Option | Type | |
+| --- | --- | --- |
+| `name`, `description` | `string` | Tool identity; `description` drives the model's tool-use decision. |
+| `catalog`, `model`, `inputSchema?`, `buildPrompt?`, `instructions?`, `config?`, `validate?`, `onIssues?` | | Same as the flow (default input is `{ intent: string }`). |
+| `onSpec?` | `(spec, input, { context }) => void \| Promise` | Final spec, out-of-band. Throw to abort. |
+| `onPartial?` | `(spec, input, { context }) => void` | Render-safe partial per applied patch — wire to live updates. |
+
+`context` is Genkit's action context: pass request-scoped values (e.g. a
+streaming channel) via `ai.generate({ context: { ... } })` and read them back in
+the callbacks — no `AsyncLocalStorage` needed. See the
+[`agentic-chat` example](../../examples/agentic-chat).
+
+### `sanitizePartialSpec(spec)`
+
+The pruning used for streamed partials, exported for hosts that forward specs
+through their own channel: drops child refs to missing elements and returns
+`null` while the spec has no resolvable root.
 
 ## How it works
 
